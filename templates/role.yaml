@@ -1,0 +1,21 @@
+{{- if .Values.rbac.create -}}
+apiVersion: {{ include "general-app-chart.rbac.apiVersion" . }}
+kind: Role
+metadata:
+  name: {{ template "general-app-chart.fullname" . }}
+  labels:
+    {{- include "general-app-chart.labels" . | nindent 4 }}
+  {{- with .Values.rbac.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- if .Values.rbac.rules }}
+rules:
+  {{- toYaml .Values.rbac.rules | nindent 2 }}
+{{- else }}
+rules:
+  - apiGroups: [""] # "" indicates the core API group
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "watch", "list"]
+{{- end }}
+{{- end }}

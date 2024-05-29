@@ -1,0 +1,13 @@
+{{- if and  .Values.networkPolicy.enabled  .Values.networkPolicy.spec -}}
+---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: {{ template "general-app-chart.fullname" . }}
+  labels:
+    {{- include "general-app-chart.labels" . | nindent 4 }}
+spec:
+  {{- with .Values.networkPolicy.spec }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,324 @@
+replicas: 2
+
+nameOverride: "general-app-chart"
+fullnameOverride: "general-app-chart"
+namespaceOverride: "tmp"
+
+image:
+  repository: dummy/dummy
+  tag: "dummy"
+  imagePullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::123456789000:role/iam-role-name-here
+  autoMount: true
+
+## See `kubectl explain deployment.spec.strategy` for more
+## ref: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy
+deploymentStrategy:
+  type: RollingUpdate
+
+container:
+  ports:
+    - name: http
+      containerPort: 8080
+      protocol: TCP
+
+  livenessProbe:
+    httpGet:
+      path: /api/health/
+      port: http
+    initialDelaySeconds: 60
+    timeoutSeconds: 30
+    failureThreshold: 10
+
+  readinessProbe:
+    httpGet:
+      path: /api/health/
+      port: http
+
+  containerSecurityContext:
+    capabilities:
+      drop:
+        - ALL
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    allowPrivilegeEscalation: false
+
+  envs:
+    FOO: "bar"
+
+  envFromConfigMap: tmp
+
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  ## Container Lifecycle Hooks. Execute a specific bash command or make an HTTP request
+  lifecycleHooks: {}
+    # postStart:
+    #   exec:
+    #     command: []
+
+## Expose the service to be accessed from outside the cluster (LoadBalancer service).
+## or access it from within the cluster (ClusterIP service). Set the service type and the port to serve it.
+## ref: http://kubernetes.io/docs/user-guide/services/
+##
+service:
+  type: ClusterIP
+  annotations: {}
+  ports:
+    - port: 80
+      targetPort: http
+      protocol: TCP
+      name: http
+
+ingresses:
+  enabled: true
+  ingress:
+    - annotations:
+        kubernetes.io/ingress.class: traefik
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+        traefik.ingress.kubernetes.io/router.tls: "true"
+        traefik.ingress.kubernetes.io/router.middlewares: default-allow-vpn-and-office-ips@kubernetescrd
+      hosts:
+        - host: "dummy.atato.com"
+          paths:
+            - path: "/"
+              pathType: "Prefix"
+            - path: "/test"
+              pathType: "Prefix"
+              backendService: tmp
+              backendPort: 3000
+      tls:
+        - secretName: dummy-tls-cert
+          hosts:
+            - dummy.atato.com
+
+## The name of a secret in the same kubernetes namespace which contain values to be added to the environment
+## This can be useful for auth tokens, etc. Value is templated.
+externalSecret:
+  enabled: true
+  secretStoreRef: "ampc"
+  originSecretKey: "tmp"
+  refreshInterval: "1h"
+  asFiles:
+    enabled: true
+    secretStoreRef: "ampc"
+    refreshInterval: "1h"
+    originSecrets:
+      - key: "tmp"
+        fileName: tmp.yaml
+      - key: "bar"
+        fileName: bar.yaml
+
+securityContext: {}
+
+rbac:
+  create: true
+  rules: []
+
+# Apply extra labels to common labels.
+extraLabels: {}
+
+## Pod Annotations
+podAnnotations: {}
+
+## Pod Labels
+podLabels: {}
+
+## Deployment annotations
+annotations: {}
+
+migration:
+  enabled: true
+  extraLabels:
+    FOO: "bar"
+  podAnnotations:
+    FOO: "bar"
+  command:
+    - "sh"
+    - "-c"
+    - "migrate"
+  envs:
+    FOO: "bar"
+  envFromConfigMap: tmp
+  securityContext:
+    capabilities:
+      drop:
+        - ALL
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    allowPrivilegeEscalation: false
+
+## See `kubectl explain poddisruptionbudget.spec` for more
+## ref: https://kubernetes.io/docs/tasks/run-application/configure-pdb/
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+  maxUnavailable: 1
+
+## Node labels for pod assignment
+## ref: https://kubernetes.io/docs/user-guide/node-selection/
+#
+nodeSelector:
+  dummy: "dummy"
+
+## Tolerations for pod assignment
+## ref: https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/
+##
+tolerations:
+  - key: "example-key"
+    operator: "Exists"
+    effect: "NoSchedule"
+
+## @param podAffinityPreset Pod affinity preset. Ignored if `affinity` is set. Allowed values: `soft` or `hard`
+## ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#inter-pod-affinity-and-anti-affinity
+##
+podAffinityPreset: ""
+
+## @param podAntiAffinityPreset Pod anti-affinity preset. Ignored if `affinity` is set. Allowed values: `soft` or `hard`
+## Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#inter-pod-affinity-and-anti-affinity
+##
+podAntiAffinityPreset: soft
+
+## Node affinity preset
+## Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#node-affinity
+##
+nodeAffinityPreset:
+  ## @param nodeAffinityPreset.type Node affinity preset type. Ignored if `affinity` is set. Allowed values: `soft` or `hard`
+  ##
+  type: ""
+  ## @param nodeAffinityPreset.key Node label key to match. Ignored if `affinity` is set.
+  ## E.g.
+  ## key: "kubernetes.io/e2e-az-name"
+  ##
+  key: ""
+  ## @param nodeAffinityPreset.values Node label values to match. Ignored if `affinity` is set.
+  ## E.g.
+  ## values:
+  ##   - e2e-az1
+  ##   - e2e-az2
+  ##
+  values: []
+
+## @param affinity Affinity for pod assignment. Evaluated as a template.
+## Ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#affinity-and-anti-affinity
+## Note: podAffinityPreset, podAntiAffinityPreset, and nodeAffinityPreset will be ignored when it's set
+##
+affinity: {}
+
+## Topology Spread Constraints
+## ref: https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/
+##
+topologySpreadConstraints: []
+
+terminationGracePeriodSeconds: 60
+
+volumes:
+  - name: dummy
+    secret:
+      secretName: dummy
+
+volumeMounts:
+  - name: dummy
+    mountPath: /home/dummy
+    readOnly: true
+
+extraReadOnlyFiles:
+  - volumeName: "tmp"
+    mountPath: "tmp"
+    files:
+      foo.txt: |
+        bla
+      bar.txt: |
+        bla
+
+## Number of old ReplicaSets to retain
+##
+revisionHistoryLimit: 10
+
+vpa:
+  enabled: false
+
+autoscaling:
+  enabled: false
+  # minReplicas: 1
+  # maxReplicas: 100
+  # targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+networkPolicy:
+  ## @param networkPolicy.enabled Enable creation of NetworkPolicy resources. Only Ingress traffic is filtered for now.
+  ##
+  enabled: false
+  ## @param networkPolicy.allowExternal Don't require client label for connections
+  ## The Policy model to apply. When set to false, only pods with the correct
+  ## client label will have network access to port defined.
+  ## When true, will accept connections from any source
+  ## (with the correct destination port).
+  ##
+  ingress: true
+  ## @param networkPolicy.ingress When true enables the creation
+  ## an ingress network policy
+  ##
+  allowExternal: true
+  ## @param networkPolicy.explicitNamespacesSelector A Kubernetes LabelSelector to explicitly select namespaces from which traffic could be allowed
+  ## If explicitNamespacesSelector is missing or set to {}, only client Pods that are in the networkPolicy's namespace
+  ## and that match other criteria, the ones that have the good label, can reach the app.
+  ## But sometimes, we want the app to be accessible to clients from other namespaces, in this case, we can use this
+  ## LabelSelector to select these namespaces, note that the networkPolicy's namespace should also be explicitly added.
+  ##
+  ## Example:
+  ## explicitNamespacesSelector:
+  ##   matchLabels:
+  ##     role: frontend
+  ##   matchExpressions:
+  ##    - {key: role, operator: In, values: [frontend]}
+  ##
+  explicitNamespacesSelector: {}
+
+  egress:
+    ## @param networkPolicy.egress.enabled When enabled, an egress network policy will be
+    ## created allowing app to connect to external data sources from kubernetes cluster.
+    enabled: false
+    ##
+    ## @param networkPolicy.egress.ports Add individual ports to be allowed by the egress
+    ports: []
+    ## Add ports to the egress by specifying - port: <port number>
+    ## E.X.
+    ## ports:
+      ## - port: 80
+      ## - port: 443
+
+sqlCloudProxy:
+  enabled: true
+  image:
+    repository: gcr.io/cloudsql-docker/gce-proxy
+    tag: "1.33.6"
+    imagePullPolicy: IfNotPresent
+  connectionName: ""
+  containerSecurityContext:
+    runAsNonRoot: true
+
+serviceMonitor:
+  enabled: true
+  path: "/health"
+  port: 8080
+  interval: 5s
+  timeout: 3s
+  labels:
+    FOO: bar
+  annotations:
+    FOO: bar

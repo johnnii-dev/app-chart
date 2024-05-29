@@ -1,0 +1,17 @@
+apiVersion: v2
+name: general-app-chart
+description: Atato General app chart
+type: application
+version: 1.2.3
+home: https://www.atato.com/
+icon: https://www.atato.com/wp-content/uploads/2019/05/cropped-Atato_AppIcon-192x192.png
+kubeVersion: ^1.21.0-0
+maintainers:
+- email: patcharapon@atato.com
+  name: m
+- email: satjapong@atato.com
+  name: Satjapong Meeklai
+dependencies:
+  - name: common
+    version: 1.x.x
+    repository: oci://registry-1.docker.io/bitnamicharts

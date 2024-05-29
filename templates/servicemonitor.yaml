@@ -1,0 +1,47 @@
+{{- if .Values.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: prometheus-blackbox-exporter-{{ template "general-app-chart.fullname" . }}
+  labels:
+    {{- include "general-app-chart.labels" . | nindent 4 }}
+    release: kube-prometheus-stack
+  {{- with .Values.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.serviceMonitor.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  endpoints:
+  - path: /probe
+    port: http
+    scheme: http
+    interval: {{ .Values.serviceMonitor.interval | default "10s" | quote }}
+    scrapeTimeout: {{ .Values.serviceMonitor.timeout | default "5s" | quote }}
+    params:
+      module:
+      - http_2xx
+      target:
+      - http://{{ template "general-app-chart.fullname" . }}.{{ template "general-app-chart.namespace" . }}.svc.cluster.local:{{ .Values.serviceMonitor.port | default "80" }}{{ .Values.serviceMonitor.path | default .Values.container.readinessProbe.httpGet.path }}
+    metricRelabelings:
+    - action: replace
+      replacement: http://{{ template "general-app-chart.fullname" . }}.{{ template "general-app-chart.namespace" . }}.svc.cluster.local:{{ .Values.serviceMonitor.port | default "80" }}{{ .Values.serviceMonitor.path | default .Values.container.readinessProbe.httpGet.path }}
+      sourceLabels:
+      - instance
+      targetLabel: instance
+    - action: replace
+      replacement: {{ template "general-app-chart.fullname" . }}
+      sourceLabels:
+      - target
+      targetLabel: target
+  jobLabel: prometheus-blackbox-exporter
+  namespaceSelector:
+    matchNames:
+    - monitoring
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: prometheus-blackbox-exporter
+      app.kubernetes.io/name: prometheus-blackbox-exporter
+{{- end }}

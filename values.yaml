@@ -1,0 +1,222 @@
+replicas: 1
+
+nameOverride: ""
+fullnameOverride: ""
+namespaceOverride: ""
+
+image:
+  repository: ""
+  tag: ""
+  imagePullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+serviceAccount:
+  create: false
+  name: ""
+  annotations: {}
+  autoMount: false
+
+## See `kubectl explain deployment.spec.strategy` for more
+## ref: https://kubernetes.io/docs/concepts/workloads/controllers/deployment/#strategy
+deploymentStrategy:
+  type: RollingUpdate
+
+container:
+  ports:
+    - name: http
+      containerPort: 8080
+      protocol: TCP
+
+  livenessProbe: {}
+
+  readinessProbe: {}
+
+  containerSecurityContext: {}
+
+  envs: {}
+
+  envFromConfigMap: {}
+
+  resources: {}
+    # limits:
+    #   cpu: 100m
+    #   memory: 128Mi
+    # requests:
+    #   cpu: 100m
+    #   memory: 128Mi
+
+  ## Container Lifecycle Hooks. Execute a specific bash command or make an HTTP request
+  lifecycleHooks: {}
+    # postStart:
+    #   exec:
+    #     command: []
+
+## Expose the service to be accessed from outside the cluster (LoadBalancer service).
+## or access it from within the cluster (ClusterIP service). Set the service type and the port to serve it.
+## ref: http://kubernetes.io/docs/user-guide/services/
+##
+service:
+  type: ClusterIP
+  annotations: {}
+  ports:
+    - port: 80
+      targetPort: http
+      protocol: TCP
+      name: http
+
+ingresses:
+  enabled: true
+  ingress: []
+
+## The name of a secret in the same kubernetes namespace which contain values to be added to the environment
+## This can be useful for auth tokens, etc. Value is templated.
+externalSecret:
+  enabled: false
+  asFiles:
+    enabled: false
+
+securityContext: {}
+
+rbac:
+  create: true
+  rules: []
+
+# Apply extra labels to common labels.
+extraLabels: {}
+
+## Pod Annotations
+podAnnotations: {}
+
+## Pod Labels
+podLabels: {}
+
+## Deployment annotations
+annotations: {}
+
+migration:
+  enabled: false
+  extraLabels: {}
+  podAnnotations: {}
+  command: []
+    # - "sh"
+    # - "-c"
+    # - "migrate"
+  securityContext: {}
+    # capabilities:
+    #   drop:
+    #     - ALL
+    # runAsNonRoot: true
+    # runAsUser: 1000
+    # runAsGroup: 1000
+    # allowPrivilegeEscalation: false
+
+## See `kubectl explain poddisruptionbudget.spec` for more
+## ref: https://kubernetes.io/docs/tasks/run-application/configure-pdb/
+podDisruptionBudget:
+  enabled: false
+  # minAvailable: 1
+
+## Node labels for pod assignment
+## ref: https://kubernetes.io/docs/user-guide/node-selection/
+#
+nodeSelector: {}
+
+## Tolerations for pod assignment
+## ref: https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/
+##
+tolerations: []
+
+## @param podAffinityPreset Pod affinity preset. Ignored if `affinity` is set. Allowed values: `soft` or `hard`
+## ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#inter-pod-affinity-and-anti-affinity
+##
+podAffinityPreset: ""
+
+## @param podAntiAffinityPreset Pod anti-affinity preset. Ignored if `affinity` is set. Allowed values: `soft` or `hard`
+## Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#inter-pod-affinity-and-anti-affinity
+##
+podAntiAffinityPreset: soft
+
+## Node affinity preset
+## Ref: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#node-affinity
+##
+nodeAffinityPreset:
+  ## @param nodeAffinityPreset.type Node affinity preset type. Ignored if `affinity` is set. Allowed values: `soft` or `hard`
+  ##
+  type: ""
+  ## @param nodeAffinityPreset.key Node label key to match. Ignored if `affinity` is set.
+  ## E.g.
+  ## key: "kubernetes.io/e2e-az-name"
+  ##
+  key: ""
+  ## @param nodeAffinityPreset.values Node label values to match. Ignored if `affinity` is set.
+  ## E.g.
+  ## values:
+  ##   - e2e-az1
+  ##   - e2e-az2
+  ##
+  values: []
+
+## @param affinity Affinity for pod assignment. Evaluated as a template.
+## Ref: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#affinity-and-anti-affinity
+## Note: podAffinityPreset, podAntiAffinityPreset, and nodeAffinityPreset will be ignored when it's set
+##
+affinity: {}
+
+## Topology Spread Constraints
+## ref: https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/
+##
+topologySpreadConstraints: []
+
+terminationGracePeriodSeconds: ""
+
+volumes: []
+
+volumeMounts: []
+
+extraReadOnlyFiles: []
+
+## Number of old ReplicaSets to retain
+##
+revisionHistoryLimit: ""
+
+vpa:
+  enabled: false
+
+autoscaling:
+  enabled: false
+  # minReplicas: 1
+  # maxReplicas: 100
+  # targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+networkPolicy:
+  enabled: false # Until we have all rolled out, we want it not enabled
+  spec:          # The default policy forbids all outbound network access
+    endpointSelector: {}
+    ingress:
+      - {}
+    egress:
+      - {}
+
+sqlCloudProxy:
+  enabled: false
+  # image:
+  #   repository: gcr.io/cloudsql-docker/gce-proxy
+  #   tag: "1.33.6"
+  #   imagePullPolicy: IfNotPresent
+  # connectionName: ""
+  # containerSecurityContext:
+  #   runAsNonRoot: true
+
+serviceMonitor:
+  # When set true then use a ServiceMonitor to configure scraping
+  enabled: false
+  # path: "/api/health/"
+  # port: "80"
+  # Set how frequently the service should scrape
+  # interval: 30s
+  # Set timeout for scrape
+  # timeout: 10s
+  # Set labels for the ServiceMonitor, use this to define your scrape label for Prometheus Operator
+  # labels: {}

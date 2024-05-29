@@ -1,0 +1,193 @@
+{{- $fullName := include "general-app-chart.fullname" . -}}
+{{- $labels := include "general-app-chart.labels" . -}}
+{{- if .Values.migration.enabled -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $fullName }}-migration
+  labels:
+    {{- $labels | nindent 4 }}
+    migration_container: "true"
+  annotations:
+    # This is what defines this resource as a hook. Without this line, the
+    # job is considered part of the release.
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      name: {{ $fullName }}-migration
+      labels:
+        {{- include "general-app-chart.selectorLabels" . | nindent 8 }}
+        {{- with .Values.migration.extraLabels }}
+           {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- if .Values.migration.podAnnotations }}
+      annotations:
+        {{- toYaml .Values.migration.podAnnotations | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ template "general-app-chart.serviceAccountName" . }}-migration
+      {{- end }}
+      restartPolicy: Never
+      {{- if .Values.migration.securityContext }}
+      securityContext:
+        {{- toYaml .Values.migration.securityContext | nindent 8 }}
+      {{- end }}
+      containers:
+        {{- if .Values.sqlCloudProxy.enabled }}
+        - name: cloud-sql-proxy
+          image: "{{ .Values.sqlCloudProxy.image.repository }}:{{ .Values.sqlCloudProxy.image.tag }}"
+          imagePullPolicy: {{ .Values.sqlCloudProxy.image.pullPolicy }}
+          command:
+            - /cloud_sql_proxy
+            - -instances={{ .Values.sqlCloudProxy.connectionName }}
+          {{- if .Values.sqlCloudProxy.containerSecurityContext }}
+          securityContext:
+            {{- toYaml .Values.sqlCloudProxy.containerSecurityContext | nindent 12 }}
+          {{- end }}
+        {{- end }}
+        - name: {{ $fullName }}-migration
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            {{- toYaml .Values.migration.command | nindent 12 }}
+          {{- if .Values.migration.envs }}
+          env:
+            {{- range $key, $value := .Values.migration.envs }}
+            - name: {{ $key }}
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ $fullName }}-migration
+                  key: {{ $key }}
+            {{- end }}
+          {{- end }}
+          envFrom:
+          {{- if .Values.migration.envFromConfigMap }}
+            - configMapRef:
+                name: {{ .Values.migration.envFromConfigMap }}
+          {{- end }}
+          {{- if .Values.externalSecret.enabled }}
+            - secretRef:
+                name: {{ $fullName }}-migration
+          {{- end }}
+          lifecycle:
+            # Adding job terminating delay so that fluentd has enough time to collect logs
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 5"]
+          volumeMounts:
+          {{- range .Values.extraReadOnlyFiles }}
+            - name: {{ .volumeName }}-migration
+              mountPath: {{ .mountPath }}
+              readOnly: true
+          {{- end }}
+      {{- with .Values.migration.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.migration.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.migration.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.migration.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ .Values.migration.terminationGracePeriodSeconds }}
+      {{- end }}
+      volumes:
+      {{- range .Values.extraReadOnlyFiles }}
+        - name: {{ .volumeName }}-migration
+          secret:
+            secretName: {{ $fullName }}-{{ .volumeName }}-migration
+      {{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $fullName }}-migration
+  labels:
+    {{- $labels | nindent 4 }}
+    migration_container: "true"
+  annotations:
+    # This is what defines this resource as a hook. Without this line, the
+    # job is considered part of the release.
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed,before-hook-creation
+data:
+{{- range $key, $value := .Values.migration.envs }}
+  {{ $key | upper }}: {{ $value | quote }}
+{{- end }}
+---
+{{- if .Values.externalSecret.enabled }}
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: {{ $fullName }}-migration
+  labels:
+    {{- $labels | nindent 4 }}
+    migration_container: "true"
+  annotations:
+    # This is what defines this resource as a hook. Without this line, the
+    # job is considered part of the release.
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed,before-hook-creation
+spec:
+  refreshInterval: {{ .Values.externalSecret.refreshInterval }}
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: {{ .Values.externalSecret.secretStoreRef }}
+  target:
+    name: {{ $fullName }}-migration
+    creationPolicy: Owner
+  dataFrom:
+  - extract:
+      key: {{ .Values.externalSecret.originSecretKey }}
+{{- end }}
+{{- range .Values.extraReadOnlyFiles }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $fullName }}-{{ .volumeName }}-migration
+  labels:
+    {{- $labels | nindent 4 }}
+    migration_container: "true"
+  annotations:
+    # This is what defines this resource as a hook. Without this line, the
+    # job is considered part of the release.
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed,before-hook-creation
+data:
+{{- range $key, $value := .files }}
+  {{ $key }}: {{ $value | b64enc | quote }}
+{{- end }}
+{{- end }}
+{{- if .Values.serviceAccount.create }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ template "general-app-chart.serviceAccountName" . }}-migration
+  labels:
+    {{- $labels | nindent 4 }}
+    migration_container: "true"
+  annotations:
+    # This is what defines this resource as a hook. Without this line, the
+    # job is considered part of the release.
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": hook-succeeded,hook-failed,before-hook-creation
+  {{- with .Values.serviceAccount.annotations }}
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- end }}

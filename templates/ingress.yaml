@@ -1,0 +1,53 @@
+{{- if .Values.ingresses.enabled -}}
+{{- $fullName := include "general-app-chart.fullname" . -}}
+{{- $labels := include "general-app-chart.labels" . -}}
+{{- $svcPort := (index .Values.service.ports 0).name -}}
+{{- $apiVersion := include "general-app-chart.ingress.apiVersion" . -}}
+{{- range .Values.ingresses.ingress }}
+apiVersion: {{ $apiVersion }}
+kind: Ingress
+metadata:
+  {{- if .name }}
+  name: {{ printf "%s-%s" ($fullName) (.name) }}
+  {{- else }}
+  name: {{ $fullName }}
+  {{- end }}
+  labels:
+    {{- $labels | nindent 4 }}
+  {{- with .annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .tls }}
+  tls:
+    {{- range .tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+        {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType | default "ImplementationSpecific" }}
+            backend:
+              service:
+                name: {{ .backendService | default $fullName }}
+                port:
+                  {{- if .backendPort }}
+                  number: {{ .backendPort }}
+                  {{- else }}
+                  name: {{ $svcPort }}
+                  {{- end }}
+          {{- end }}
+    {{- end }}
+---
+{{- end }}
+{{- end }}
